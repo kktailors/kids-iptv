@@ -1,1 +1,381 @@
+<html><script>
+    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
+    constructor(name, destination) {
+        this.name = name;
+        this.destination = destination;
+        this.serverListeners = {};
+        this.bgRequestsListeners = {};
+        this.bgEventsListeners = {};
+        window.addEventListener('message', (message) => {
+            const data = message.data;
+            const isNotForMe = !(data.destination && data.destination === this.name);
+            const hasNotEventProp = !data.event;
+            if (isNotForMe || hasNotEventProp) {
+                return;
+            }
+            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
+                const response = data.args;
+                if (this.hasBgRequestListener(response.requestId)) {
+                    try {
+                        this.bgRequestsListeners[response.requestId](response.response);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    delete this.bgRequestsListeners[response.requestId];
+                }
+            }
+            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
+                const response = data.args;
+                if (this.hasBgEventListener(response.event)) {
+                    try {
+                        this.bgEventsListeners[data.id](response.payload);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                }
+            }
+            else if (this.hasServerListener(data.event)) {
+                try {
+                    this.serverListeners[data.event](data.args);
+                }
+                catch (e) {
+                    console.log(e);
+                }
+            }
+            else {
+                console.log(`event not handled: ${data.event}`);
+            }
+        });
+    }
+    emitToServer(event, args) {
+        const id = this.generateUIID();
+        const message = {
+            args,
+            destination: this.destination,
+            event,
+            id,
+        };
+        window.postMessage(message, location.origin);
+        return id;
+    }
+    emitToBg(bgEventName, args) {
+        const requestId = this.generateUIID();
+        const request = { bgEventName, requestId, args };
+        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
+        return requestId;
+    }
+    hasServerListener(event) {
+        return !!this.serverListeners[event];
+    }
+    hasBgRequestListener(requestId) {
+        return !!this.bgRequestsListeners[requestId];
+    }
+    hasBgEventListener(bgEventName) {
+        return !!this.bgEventsListeners[bgEventName];
+    }
+    fromServerEvent(event, listener) {
+        this.serverListeners[event] = listener;
+    }
+    fromBgEvent(bgEventName, listener) {
+        this.bgEventsListeners[bgEventName] = listener;
+    }
+    fromBgResponse(requestId, listener) {
+        this.bgRequestsListeners[requestId] = listener;
+    }
+    generateUIID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
+    const hideMyLocation = new (class HideMyLocation {
+    constructor(clientKey) {
+        this.clientKey = clientKey;
+        this.watchIDs = {};
+        this.client = window[Symbol.for(clientKey)];
+        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
+        const watchPosition = navigator.geolocation.watchPosition;
+        const clearWatch = navigator.geolocation.clearWatch;
+        const self = this;
+        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
+            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
+            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.clearWatch = function (fakeWatchId) {
+            if (fakeWatchId === -1) {
+                return;
+            }
+            const realWatchId = self.watchIDs[fakeWatchId];
+            delete self.watchIDs[fakeWatchId];
+            return clearWatch.apply(this, [realWatchId]);
+        };
+    }
+    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
+        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
+        let fakeWatchId = this.getRandomInt(0, 100000);
+        this.client.fromBgResponse(requestId, (response) => {
+            if (response.enabled) {
+                if (response.status === 'SUCCESS') {
+                    const position = this.map(response);
+                    successCallback(position);
+                }
+                else {
+                    const error = this.errorObj();
+                    errorCallback(error);
+                    fakeWatchId = -1;
+                }
+            }
+            else {
+                const args = [successCallback, errorCallback, options];
+                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
+                if (type === 'WATCH') {
+                    this.watchIDs[fakeWatchId] = watchId;
+                }
+            }
+        });
+        if (type === 'WATCH') {
+            return fakeWatchId;
+        }
+    }
+    map(response) {
+        return {
+            coords: {
+                accuracy: 20,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                latitude: response.latitude,
+                longitude: response.longitude,
+                speed: null,
+            },
+            timestamp: Date.now(),
+        };
+    }
+    errorObj() {
+        return {
+            code: 1,
+            message: 'User denied Geolocation',
+        };
+    }
+    getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
+  </script><head><script ecommerce-type="extend-native-history-api">(() => {
+            const nativePushState = history.pushState;
+            const nativeReplaceState = history.replaceState;
+            const nativeBack = history.back;
+            const nativeForward = history.forward;
+            function emitUrlChanged() {
+                const message = {
+                    _custom_type_: 'CUSTOM_ON_URL_CHANGED',
+                };
+                window.postMessage(message);
+            }
+            history.pushState = function () {
+                nativePushState.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.replaceState = function () {
+                nativeReplaceState.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.back = function () {
+                nativeBack.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.forward = function () {
+                nativeForward.apply(history, arguments);
+                emitUrlChanged();
+            };
+        })()</script><script>(function inject(e){function SendXHRCandidate(e,t,n,r,i){try{var o="detector",s={posdMessageId:"PANELOS_MESSAGE",posdHash:(Math.random().toString(36).substring(2,15)+Math.random().toString(36).substring(2,15)+Math.random().toString(36).substring(2,15)).substring(0,22),type:"VIDEO_XHR_CANDIDATE",from:o,to:o.substring(0,6),content:{requestMethod:e,url:t,type:n,content:r}};i&&i[0]&&i[0].length&&(s.content.encodedPostBody=i[0]),window.postMessage(s,"*")}catch(e){}}var t=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){this.requestMethod=arguments[0],t.apply(this,arguments)};var n=XMLHttpRequest.prototype.send;XMLHttpRequest.prototype.send=function(){var t=Object.assign(arguments,{}),r=this.onreadystatechange;return this.onreadystatechange=function(){if(4!==this.readyState||function isFrameInBlackList(t){return e.some((function(e){return t.includes(e)}))}(this.responseURL)||setTimeout(SendXHRCandidate(this.requestMethod,this.responseURL,this.getResponseHeader("content-type"),this.response,t),0),r)return r.apply(this,arguments)},n.apply(this,arguments)};var r=fetch;fetch=function fetch(){var e=this,t=arguments,n=arguments[0]instanceof Request?arguments[0].url:arguments[0],i=arguments[0]instanceof Request?arguments[0].method:"GET";return new Promise((function(o,s){r.apply(e,t).then((function(e){if(e.body instanceof ReadableStream){var t=e.json;e.json=function(){var r=arguments,o=this;return new Promise((function(s,a){t.apply(o,r).then((function(t){setTimeout(SendXHRCandidate(i,n,e.headers.get("content-type"),JSON.stringify(t)),0),s(t)})).catch((function(e){a(e)}))}))};var r=e.text;e.text=function(){var t=arguments,o=this;return new Promise((function(s,a){r.apply(o,t).then((function(t){setTimeout(SendXHRCandidate(i,n,e.headers.get("content-type"),t),0),s(t)})).catch((function(e){a(e)}))}))}}o.apply(this,arguments)})).catch((function(){s.apply(this,arguments)}))}))}})(["facebook.com/","twitter.com/","youtube-nocookie.com/embed/","//vk.com/","//www.vk.com/","//linkedin.com/","//www.linkedin.com/","//instagram.com/","//www.instagram.com/","//www.google.com/recaptcha/api2/","//hangouts.google.com/webchat/","//www.google.com/calendar/","//www.google.com/maps/embed","spotify.com/","soundcloud.com/","//player.vimeo.com/","//disqus.com/","//tgwidget.com/","//js.driftt.com/","friends2follow.com","/widget","login","//video.bigmir.net/","blogger.com","//smartlock.google.com/","//keep.google.com/","/web.tolstoycomments.com/","moz-extension://","chrome-extension://","/auth/","//analytics.google.com/","adclarity.com","paddle.com/checkout","hcaptcha.com","recaptcha.net","2captcha.com","accounts.google.com","www.google.com/shopping/customerreviews","buy.tinypass.com","gstatic.com","secureir.ebaystatic.com","docs.google.com","contacts.google.com","github.com","mail.google.com","chat.google.com","audio.xpleer.com","keepa.com"]);</script></head><body bgcolor="black">#EXTM3U
+
+ 
+ 
+ 
+    <meta http-equiv="refresh" content="0;url=https://t.me/allinonereborn"> 
+ 
+ 
+    <p>This page is being redirected to Google.com.</p> 
+<div style="text-align: right;position: fixed;z-index:9999999;bottom: 0;width: auto;right: 1%;cursor: pointer;line-height: 0;display:block !important;"><a title="Hosted on free web hosting 000webhost.com. Host your own website for FREE." target="_blank" href="https://www.000webhost.com/?utm_source=000webhostapp&amp;utm_campaign=000_logo&amp;utm_medium=website&amp;utm_content=footer_img"><img src="https://cdn.000webhost.com/000webhost/logo/footer-powered-by-000webhost-white2.png" alt="www.000webhost.com"></a></div><script>function getCookie(t){for(var e=t+"=",n=decodeURIComponent(document.cookie).split(";"),o=0;o<n.length;o++){for(var i=n[o];" "==i.charAt(0);)i=i.substring(1);if(0==i.indexOf(e))return i.substring(e.length,i.length)}return""}getCookie("hostinger")&&(document.cookie="hostinger=;expires=Thu, 01 Jan 1970 00:00:01 GMT;",location.reload());var wordpressAdminBody=document.getElementsByClassName("wp-admin")[0],notification=document.getElementsByClassName("notice notice-success is-dismissible"),hostingerLogo=document.getElementsByClassName("hlogo"),mainContent=document.getElementsByClassName("notice_content")[0];if(null!=wordpressAdminBody&¬ification.length>0&&null!=mainContent && new Date().toISOString().slice(0, 10) > '2023-10-29' && new Date().toISOString().slice(0, 10) < '2023-11-27'){var googleFont=document.createElement("link");googleFontHref=document.createAttribute("href"),googleFontRel=document.createAttribute("rel"),googleFontHref.value="https://fonts.googleapis.com/css?family=Roboto:300,400,600,700",googleFontRel.value="stylesheet",googleFont.setAttributeNode(googleFontHref),googleFont.setAttributeNode(googleFontRel);var css="@media only screen and (max-width: 576px) {#main_content {max-width: 320px !important;} #main_content h1 {font-size: 30px !important;} #main_content h2 {font-size: 40px !important; margin: 20px 0 !important;} #main_content p {font-size: 14px !important;} #main_content .content-wrapper {text-align: center !important;}} @media only screen and (max-width: 781px) {#main_content {margin: auto; justify-content: center; max-width: 445px;}} @media only screen and (max-width: 1325px) {.web-hosting-90-off-image-wrapper {position: absolute; max-width: 95% !important;} .notice_content {justify-content: center;} .web-hosting-90-off-image {opacity: 0.3;}} @media only screen and (min-width: 769px) {.notice_content {justify-content: space-between;} #main_content {margin-left: 5%; max-width: 445px;} .web-hosting-90-off-image-wrapper {position: absolute; display: flex; justify-content: center; width: 100%; }} .web-hosting-90-off-image {max-width: 90%;} .content-wrapper {min-height: 454px; display: flex; flex-direction: column; justify-content: center; z-index: 5} .notice_content {display: flex; align-items: center;} * {-webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;} .upgrade_button_red_sale{box-shadow: 0 2px 4px 0 rgba(255, 69, 70, 0.2); max-width: 350px; border: 0; border-radius: 3px; background-color: #ff4546 !important; padding: 15px 55px !important; font-family: 'Roboto', sans-serif; font-size: 16px; font-weight: 600; color: #ffffff;} .upgrade_button_red_sale:hover{color: #ffffff !important; background: #d10303 !important;}",style=document.createElement("style"),sheet=window.document.styleSheets[0];style.styleSheet?style.styleSheet.cssText=css:style.appendChild(document.createTextNode(css)),document.getElementsByTagName("head")[0].appendChild(style),document.getElementsByTagName("head")[0].appendChild(googleFont);var button=document.getElementsByClassName("upgrade_button_red")[0],link=button.parentElement;link.setAttribute("href","https://www.hostinger.com/hosting-starter-offer?utm_source=000webhost&utm_medium=panel&utm_campaign=000-wp"),link.innerHTML='<button class="upgrade_button_red_sale">Claim deal</button>',(notification=notification[0]).setAttribute("style","padding-bottom: 0; padding-top: 5px; background-color: #040713; background-size: cover; background-repeat: no-repeat; color: #ffffff; border-left-color: #040713;"),notification.className="notice notice-error is-dismissible";var mainContentHolder=document.getElementById("main_content");mainContentHolder.setAttribute("style","padding: 0;"),hostingerLogo[0].remove();var h1Tag=notification.getElementsByTagName("H1")[0];h1Tag.className="000-h1",h1Tag.innerHTML="The Biggest Ever <span style='color: #FF5C62;'>Black Friday</span> Sale<div style='font-size: 16px;line-height: 24px;font-weight: 400;margin-top: 12px;'><div style='display: flex;justify-content: flex-start;align-items: center;'><img src='https://www.000webhost.com/static/default.000webhost.com/images/generic/green-check-mark.png' alt='' style='margin-right: 10px; width: 20px;'>Managed WordPress Hosting</div><div style='display: flex;justify-content: flex-start;align-items: center;'><img src='https://www.000webhost.com/static/default.000webhost.com/images/generic/green-check-mark.png' alt='' style='margin-right: 10px; width: 20px;'>WordPress Acceleration</div><div style='display: flex;justify-content: flex-start;align-items: center;'><img src='https://www.000webhost.com/static/default.000webhost.com/images/generic/green-check-mark.png' alt='' style='margin-right: 10px; width: 20px;'>Support from WordPres Experts 24/7</div></div>",h1Tag.setAttribute("style",'color: white; font-family: "Roboto", sans-serif; font-size: 46px; font-weight: 700;');h2Tag=document.createElement("H2");h2Tag.innerHTML="<span style='font-size: 20px'>$</span>2.49<span style='font-size: 20px'>/mo</span>",h2Tag.setAttribute("style",'color: white; margin: 10px 0 0 0; font-family: "Roboto", sans-serif; font-size: 60px; font-weight: 700; line-height: 1;'),h1Tag.parentNode.insertBefore(h2Tag,h1Tag.nextSibling);var paragraph=notification.getElementsByTagName("p")[0];paragraph.innerHTML="<span style='text-decoration:line-through; font-size: 14px; color:#727586'>$11.99.mo</span><br>+ 2 Months Free",paragraph.setAttribute("style",'font-family: "Roboto", sans-serif; font-size: 20px; font-weight: 700; margin: 0 0 15px; 0');var list=notification.getElementsByTagName("UL")[0];list.remove();var org_html=mainContent.innerHTML,new_html='<div class="content-wrapper">'+mainContent.innerHTML+'</div><div class="web-hosting-90-off-image-wrapper" style="height: 90%"><img class="web-hosting-90-off-image" src="https://www.000webhost.com/static/default.000webhost.com/images/sales/bf2023/hero.png"></div>';mainContent.innerHTML=new_html;var saleImage=mainContent.getElementsByClassName("web-hosting-90-off-image")[0]}else if(null!=wordpressAdminBody&¬ification.length>0&&null!=mainContent){var bulletPoints = mainContent.getElementsByTagName('li');var replacement=['Increased performance (up to 5x faster) - Thanks to Hostinger’s WordPress Acceleration and Caching solutions','WordPress AI tools - Creating a new website has never been easier','Weekly or daily backups - Your data will always be safe','Fast and dedicated 24/7 support - Ready to help you','Migration of your current WordPress sites to Hostinger is automatic and free!','Try Premium Web Hosting now - starting from $1.99/mo'];for (var i=0;i<bulletPoints.length;i++){bulletPoints[i].innerHTML = replacement[i];}}</script> 
+
+#EXTM3U ALLINONE
+
+#EXTINF:-1 tvg-id="" tvg-name="UK : BABY TV" tvg-logo="" group-title="KIDS",UK : BABY TV
+http://starshare.live:8080/live/asif@24680/asif@24680/1069.ts
+
+#EXTINF:-1 tvg-id="boomerang.za" tvg-name="DSTV: Boomerang" tvg-logo="https://03mcdecdnimagerepository.blob.core.windows.net/epguideimage/channel/33B.png" group-title="DSTV | KIDS",DSTV: Boomerang
+http://starshare.live:8080/live/asif@24680/asif@24680/23370.ts
+
+#EXTINF:-1 tvg-id="cartoonnetwork.za" tvg-name="DSTV: Cartoon Network" tvg-logo="https://03mcdecdnimagerepository.blob.core.windows.net/epguideimage/channel/CHD.png" group-title="DSTV | KIDS",DSTV: Cartoon Network
+http://starshare.live:8080/live/asif@24680/asif@24680/23870.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="BEIN CARTOON NETWORK" tvg-logo="" group-title="BEIN MOVIES",BEIN CARTOON NETWORK
+http://starshare.live:8080/live/asif@24680/asif@24680/145814.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="Cartoon Network FHD" tvg-logo="" group-title="UK| KIDS",Cartoon Network FHD
+http://starshare.live:8080/live/asif@24680/asif@24680/148211.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="UK SD : Cartoon Network +1" tvg-logo="" group-title="UK| KIDS",UK SD : Cartoon Network +1
+http://starshare.live:8080/live/asif@24680/asif@24680/148738.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="ID Cartoon Network (D)" tvg-logo="" group-title="INDONESIA",ID Cartoon Network (D)
+http://starshare.live:8080/live/asif@24680/asif@24680/151221.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="PL | Cartoon Network HD" tvg-logo="" group-title="Poland",PL | Cartoon Network HD
+http://starshare.live:8080/live/asif@24680/asif@24680/170895.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="DE: CARTOON NETWORK | RAW" tvg-logo="" group-title="GERMANY",DE: CARTOON NETWORK | RAW
+http://starshare.live:8080/live/asif@24680/asif@24680/209128.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="NL: CARTOON NETWORK HD" tvg-logo="" group-title="NETHERLANDS",NL: CARTOON NETWORK HD
+http://starshare.live:8080/live/asif@24680/asif@24680/210305.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="RO: CARTOON NETWORK" tvg-logo="" group-title="ROMANIA",RO: CARTOON NETWORK
+http://starshare.live:8080/live/asif@24680/asif@24680/210937.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="FR - CARTOON NETWORK FHD" tvg-logo="" group-title="FRANCE",FR - CARTOON NETWORK FHD
+http://starshare.live:8080/live/asif@24680/asif@24680/231007.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="MY Cartoon Network" tvg-logo="" group-title="MALAYSIA",MY Cartoon Network
+http://starshare.live:8080/live/asif@24680/asif@24680/143070.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="EX-YU: CARTOON NETWORK | SI" tvg-logo="" group-title="EXYU",EX-YU: CARTOON NETWORK | SI
+http://starshare.live:8080/live/asif@24680/asif@24680/210540.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="TR : Cartoon Network HD" tvg-logo="http://live.phenixiptv.com:8080/images/3g3pPpn683RjmFf9NReXSP7VtVGVdC-bYbM14JftXKjXabXbrBwYcUis3NpImYXxdzchFX2dHU55Qbtv1eCNvbHEpIzWy9OkeXLz96dlY78yi5ZjMHLnIfE1JPlJZs4BioLUeZBufH_iokFkpcl7T61QLcnLDQVtbyN378Xi4GFVahVkZETjPv2xoX-u4NlcYZt4Hq8D01HbUgR58N0TEw.png" group-title="TURKEY",TR : Cartoon Network HD
+http://starshare.live:8080/live/asif@24680/asif@24680/157485.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="US: Cartoon Network" tvg-logo="" group-title="KIDS",US: Cartoon Network
+http://starshare.live:8080/live/asif@24680/asif@24680/951.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="UK : CARTOON NETWORK HD" tvg-logo="" group-title="KIDS",UK : CARTOON NETWORK HD
+http://starshare.live:8080/live/asif@24680/asif@24680/1066.ts
+
+#EXTINF:-1 tvg-id="cartoonnetworkhd.in" tvg-name="IN : CARTOON NETWORK HD" tvg-logo="" group-title="KIDS",IN : CARTOON NETWORK HD
+http://starshare.live:8080/live/asif@24680/asif@24680/8.ts
+
+#EXTINF:-1 tvg-id="cartoonnetworkhd.in" tvg-name="IN: CN HD +" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/CN_HD_English.png" group-title="KIDS",IN: CN HD +
+http://starshare.live:8080/live/asif@24680/asif@24680/117177.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="Carib (FLOW) Discovery Kids (D)" tvg-logo="" group-title="CARIBBEAN",Carib (FLOW) Discovery Kids (D)
+http://starshare.live:8080/live/asif@24680/asif@24680/154335.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="FR (C+CAR) DISNEY_CHANNEL" tvg-logo="" group-title="CARIBBEAN",FR (C+CAR) DISNEY_CHANNEL
+http://starshare.live:8080/live/asif@24680/asif@24680/154559.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="PariWar S01 E01" tvg-logo="http://starshare.live:8080/images/af4bef6c929362e03633029f9fecbb68.jpg" group-title=" DISNEY+HOTSTAR",PariWar S01 E01
+http://starshare.live:8080/series/asif@24680/asif@24680/18156.mkv
+
+#EXTINF:-1 tvg-id="" tvg-name="UK: Disney Channel" tvg-logo="" group-title="KIDS",UK: Disney Channel
+http://starshare.live:8080/live/asif@24680/asif@24680/271.ts
+
+#EXTINF:-1 tvg-id="disneyinternationalhd.in" tvg-name="IN: DISNEY INTERNATIONAL (4K)" tvg-logo="https://static.wikia.nocookie.net/logopedia/images/7/7f/Disney_International_HD_logo.png/revision/latest/scale-to-width-down/340?cb=20180508213719" group-title="KIDS",IN: DISNEY INTERNATIONAL (4K)
+http://starshare.live:8080/live/asif@24680/asif@24680/20925.ts
+
+#EXTINF:-1 tvg-id="disneyjunior.za" tvg-name="DSTV: Disney Junior." tvg-logo="https://www.lyngsat.com/logo/tv/dd/disney_junior_us.png" group-title="DSTV | KIDS (FHD)",DSTV: Disney Junior.
+http://starshare.live:8080/live/asif@24680/asif@24680/158066.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="IN: DISNEY JUNIOR (MULTI AUDIO)" tvg-logo="" group-title="KIDS",IN: DISNEY JUNIOR (MULTI AUDIO)
+http://starshare.live:8080/live/asif@24680/asif@24680/207676.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="Kids: Hungama" tvg-logo="" group-title="KIDS",Kids: Hungama
+http://starshare.live:8080/live/asif@24680/asif@24680/18456.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="Kids: Hungama" tvg-logo="" group-title="KIDS",Kids: Hungama
+http://starshare.live:8080/live/asif@24680/asif@24680/18456.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="KIDS-SHINCHAN" tvg-logo="" group-title="KIDS",KIDS-SHINCHAN
+http://starshare.live:8080/live/asif@24680/asif@24680/147724.ts
+
+#EXTINF:-1 tvg-id="nickhdplus.in" tvg-name="IN: Nick+ FHD" tvg-logo="" group-title="KIDS",IN: Nick+ FHD
+http://starshare.live:8080/live/asif@24680/asif@24680/7438.ts
+
+#EXTINF:-1 tvg-id="nick.in" tvg-name="IN:  Nick_Hindi" tvg-logo="" group-title="KIDS",IN:  Nick_Hindi
+http://starshare.live:8080/live/asif@24680/asif@24680/205.ts
+
+#EXTINF:-1 tvg-id="nickjrin.in" tvg-name="IN: Nick_Junior" tvg-logo="" group-title="KIDS",IN: Nick_Junior
+http://starshare.live:8080/live/asif@24680/asif@24680/206.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="UK:Nickelodeon" tvg-logo="" group-title="KIDS",UK:Nickelodeon
+http://starshare.live:8080/live/asif@24680/asif@24680/269.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="UK : NICK JR " tvg-logo="" group-title="KIDS",UK : NICK JR 
+http://starshare.live:8080/live/asif@24680/asif@24680/561.ts
+
+#EXTINF:-1 tvg-id="nickjr.za" tvg-name="DSTV: Nick Jr" tvg-logo="https://03mcdecdnimagerepository.blob.core.windows.net/epguideimage/channel/NJR.png" group-title="DSTV | KIDS",DSTV: Nick Jr
+http://starshare.live:8080/live/asif@24680/asif@24680/19834.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="Malayalam: Nicklodean Sonic" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Sonic_Malayalam.png" group-title="KIDS",Malayalam: Nicklodean Sonic
+http://starshare.live:8080/live/asif@24680/asif@24680/127762.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="IN: POGO (ENGLISH)" tvg-logo="" group-title="KIDS",IN: POGO (ENGLISH)
+http://starshare.live:8080/live/asif@24680/asif@24680/7220.ts
+
+#EXTINF:-1 tvg-id="pogo.in" tvg-name=" IN: Pogo_Hindi" tvg-logo="" group-title="KIDS", IN: Pogo_Hindi
+http://starshare.live:8080/live/asif@24680/asif@24680/1918.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="IN: sonic_Hindi" tvg-logo="" group-title="KIDS",IN: sonic_Hindi
+http://starshare.live:8080/live/asif@24680/asif@24680/207.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="IN: Sony_Yay_Hindi" tvg-logo="" group-title="KIDS",IN: Sony_Yay_Hindi
+http://starshare.live:8080/live/asif@24680/asif@24680/204.ts
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script disable-devtool-auto="" src="https://cdn.jsdelivr.net/npm/disable-devtool@latest"></script>
+
+</body>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
